@@ -1,4 +1,5 @@
-import numpy
+import time
+import numpy as np
 import math
 
 # 使用西瓜书中的特征样本
@@ -95,81 +96,124 @@ for line in test_info:
     print(line)
 
 transfer_info(test_info)
-print("=================测试集转换前=================")
-for line in train_info:
+print("=================测试集转换后=================")
+for line in test_info:
     print(line)
 
-# for循环 + BP版本
-# 特征数量
-feature_num = len(train_info) - 1
-# 样本数量
-data_num = len(train_info[0])
-
-# LR的初始化不用使用高斯随机
-w = [0] * feature_num
-b = 0
-rate = 0.001
-
 cycle_num = 100000
-for k in range(cycle_num):
-    # 训练cycle_num次
-    z = [0] * data_num
-    a = [0] * data_num
-    l = [0] * data_num
-    j = 0
-    
-    da = [0] * data_num
-    dz = [0] * data_num
-    dw = [0] * feature_num
-    db = 0
-    
-    for i in range(data_num):
-        # 计算z = w^T * x + b
+rate = 0.001
+# for循环 + BP版本
+def for_plus_bp():
+    # 特征数量
+    feature_num = len(train_info) - 1
+    # 样本数量
+    data_num = len(train_info[0])
+
+    # LR的初始化不用使用高斯随机
+    w = [0] * feature_num
+    b = 0
+
+    for k in range(cycle_num):
+        # 训练cycle_num次
+        z = [0] * data_num
+        a = [0] * data_num
+        l = [0] * data_num
+        j = 0
+        
+        da = [0] * data_num
+        dz = [0] * data_num
+        dw = [0] * feature_num
+        db = 0
+        
+        for i in range(data_num):
+            # 计算z = w^T * x + b
+            for j in range(feature_num):
+                z[i] += w[j] * train_info[j][i]
+            z[i] += b
+
+            # 计算sigmoid
+            a[i] = 1 / (1 + math.exp(z[i] * -1))
+            
+            # 计算loss function = -(y * loga + (1 - y) * log(1 - a))
+            l[i] = -1 * (train_info[8][i] * math.log(a[i]) + (1 - train_info[8][i]) * math.log(1 - a[i]))
+
+            # 计算cost function = sum(loss function)
+            j += l[i]
+            
+            # 计算da = - y / a + (1 - y) / (1 - a)
+            da[i] = -1 * train_info[8][i] / a[i] + (1 - train_info[8][i]) / (1 - a[i])
+            
+            # 计算dz = a - y
+            dz[i] = a[i] - train_info[8][i]
+            
+            # 计算dw = x * dz
+            for j in range(feature_num):
+                dw[j] += train_info[j][i] * dz[i]
+            db += dz[i]
+            
+        j /= data_num
         for j in range(feature_num):
-            z[i] += w[j] * train_info[j][i]
-        z[i] += b
+            dw[j] /= data_num
+            w[j] -= rate * dw[j]
+            
+        db /= data_num
+        b -= rate * db
+        
+    print("for循环训练结果:w = ", w, "b = ", b)
 
-        # 计算sigmoid
-        a[i] = 1 / (1 + math.exp(z[i] * -1))
-        
-        # 计算loss function = -(y * loga + (1 - y) * log(1 - a))
-        l[i] = -1 * (train_info[8][i] * math.log(a[i]) + (1 - train_info[8][i]) * math.log(1 - a[i]))
-
-        # 计算cost function = sum(loss function)
-        j += l[i]
-        
-        # 计算da = - y / a + (1 - y) / (1 - a)
-        da[i] = -1 * train_info[8][i] / a[i] + (1 - train_info[8][i]) / (1 - a[i])
-        
-        # 计算dz = a - y
-        dz[i] = a[i] - train_info[8][i]
-        
-        # 计算dw = x * dz
+    # 验证结果
+    test_num = len(train_info[0])
+    test_z = [0] * len(train_info[0])
+    for i in range(test_num):
         for j in range(feature_num):
-            dw[j] += train_info[j][i] * dz[i]
-        db += dz[i]
-        
-    j /= data_num
-    for j in range(feature_num):
-        dw[j] /= data_num
-        w[j] -= rate * dw[j]
-        
-    db /= data_num
-    b -= rate * db
+            test_z[i] += w[j] * train_info[j][i]
+            
+        test_z[i] += b
+        test_z[i] = 1 / (1 + math.exp(test_z[i] * -1))
+    print("for 循环预测结果：", test_z)
+
+def np_plus_bp():
+    # numpy + bp优化版本
+    # for循环版本
+    # 特征数量
+    feature_num = len(train_info) - 1
+    # 样本数量
+    data_num = len(train_info[0])
+
+    # LR的初始化不用使用高斯随机
+    w = np.zeros(feature_num)
+    b = 0
+
+    np_train_info = np.array(train_info[:-1])
+    np_label_info = np.array(train_info[-1])
+
+    for _ in range(cycle_num):
+        # 计算所有的z = w^T * x + b
+        z = np.dot(w.T, np_train_info) + b
+        # 计算所有的sigmod
+        a = 1 / (1 + np.exp(-z))
+        # 计算所有的dz
+        dz = a - np_label_info
+        # 计算所有的dw = x * dz
+        dw = np.dot(np_train_info, dz.T) / data_num
+        # 计算db
+        db = np.sum(dz) / data_num
+        # 更新所有的w
+        w = w - rate * dw
+        # 更新b
+        b = b - rate * db
+
+    print("np 训练结果, w = ", w, ", b = ", b)
+    test_num = len(train_info[0])
+    test_z = np.dot(w.T, np_train_info) + b
+    test_a = 1 / (1 + np.exp(-test_z))
+    print("np 预测结果 = ", test_a)
+
+if __name__ == '__main__':
+    start_time = time.time()
+    for_plus_bp()
+    print("for_plus_bp cost time:", time.time() - start_time)
+    start_time = time.time()
+    np_plus_bp()
+    print("np_plus_bp cost time:", time.time() - start_time)
     
-    print(w[0], b)
-
-# 验证结果
-test_num = len(train_info[0])
-test_z = [0] * len(train_info[0])
-for i in range(test_num):
-    for j in range(feature_num):
-        test_z[i] += w[j] * train_info[j][i]
-        
-    test_z[i] += b
-    test_z[i] = 1 / (1 + math.exp(test_z[i] * -1))
-    print(test_z[i], train_info[8][i], test_z[i] > 0.5)
-
-#numpy + bp版本
-
-#numpy + 牛顿迭代版本
