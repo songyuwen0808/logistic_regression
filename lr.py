@@ -181,7 +181,7 @@ def np_plus_bp():
     data_num = len(train_info[0])
 
     # LR的初始化不用使用高斯随机
-    w = np.zeros(feature_num)
+    w = np.zeros(feature_num, 1)
     b = 0
 
     np_train_info = np.array(train_info[:-1])
